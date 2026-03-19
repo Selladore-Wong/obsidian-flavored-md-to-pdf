@@ -91,6 +91,18 @@ Use a specific browser executable:
 obsidian-flavored-md-to-pdf /path/to/note.md --browser chromium
 ```
 
+Set an explicit title block:
+
+```bash
+obsidian-flavored-md-to-pdf /path/to/note.md --title "Custom Title"
+```
+
+Disable the generated title block:
+
+```bash
+obsidian-flavored-md-to-pdf /path/to/note.md --no-title-block
+```
+
 ## How It Works
 
 1. The input Markdown is preprocessed to handle Obsidian-style syntax.
@@ -104,6 +116,7 @@ By default:
 - an intermediate HTML file is created temporarily and then removed
 - the source note directory is always used for relative links and assets
 - if a `.obsidian` directory is found above the note, that vault root is also used when resolving Obsidian-style wiki links
+- the generated title block uses the first level-1 heading in the source note, or falls back to the file name if no level-1 heading is present
 
 ## Mermaid Behavior
 

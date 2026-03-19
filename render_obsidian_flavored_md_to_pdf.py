@@ -16,6 +16,8 @@ DEFAULT_CSS = pathlib.Path(__file__).with_name("obsidian-minimal-print.css")
 WIKILINK_RE = re.compile(r'(!)?\[\[([^\]\n]+)\]\]')
 CALLOUT_RE = re.compile(r'^(?P<indent>\s*)>\s*\[!(?P<kind>[^\]\n]+)\]\s*(?P<title>.*)$')
 FENCE_START_RE = re.compile(r"^(?P<fence>`{3,}|~{3,})(?P<info>.*)$")
+ATX_H1_RE = re.compile(r"^\s*#\s+(?P<title>.+?)\s*#*\s*$")
+SETEXT_H1_RE = re.compile(r"^\s*=+\s*$")
 BROWSER_CANDIDATES = [
     "google-chrome",
     "chrome",
@@ -52,6 +54,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--browser",
         help="Browser command used for PDF printing. Defaults to the first available Chrome/Chromium executable.",
+    )
+    parser.add_argument(
+        "--title",
+        help="Explicit document title for the generated title block. Defaults to the first level-1 heading, then the file name.",
+    )
+    parser.add_argument(
+        "--no-title-block",
+        action="store_true",
+        help="Do not inject a Pandoc title block into the output document.",
     )
     return parser.parse_args()
 
@@ -229,6 +240,44 @@ def preprocess_markdown(
     return "\n".join(out) + "\n"
 
 
+def infer_document_title(text: str, fallback: str) -> str:
+    lines = text.splitlines()
+    in_front_matter = False
+    in_fence: str | None = None
+
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+
+        if i == 0 and stripped == "---":
+            in_front_matter = True
+            continue
+        if in_front_matter:
+            if stripped == "---" or stripped == "...":
+                in_front_matter = False
+            continue
+
+        fence_start = FENCE_START_RE.match(line)
+        if in_fence is not None:
+            if line.startswith(in_fence):
+                in_fence = None
+            continue
+        if fence_start:
+            in_fence = fence_start.group("fence")
+            continue
+
+        if stripped.startswith("%%") and stripped.endswith("%%"):
+            continue
+
+        atx_h1 = ATX_H1_RE.match(line)
+        if atx_h1:
+            return atx_h1.group("title").strip()
+
+        if i + 1 < len(lines) and line.strip() and SETEXT_H1_RE.match(lines[i + 1]):
+            return line.strip()
+
+    return fallback
+
+
 def run(cmd: list[str], cwd: pathlib.Path) -> None:
     result = subprocess.run(cmd, cwd=str(cwd), text=True)
     if result.returncode != 0:
@@ -276,6 +325,7 @@ def main() -> None:
         prepared_md = tmpdir / input_path.name
         html_path = tmpdir / output_html.name
         prepared_md.write_text(prepared, encoding="utf-8")
+        document_title = args.title if args.title is not None else infer_document_title(raw, input_path.stem)
 
         resource_paths = [str(tmpdir), str(input_path.parent)]
         if vault_root is not None and vault_root != input_path.parent:
@@ -290,10 +340,11 @@ def main() -> None:
             "--embed-resources",
             f"--resource-path={':'.join(resource_paths)}",
             f"--css={css_path}",
-            f"--metadata=title:{input_path.stem}",
             "--output",
             str(html_path),
         ]
+        if not args.no_title_block:
+            pandoc_cmd.insert(-2, f"--metadata=title:{document_title}")
         run(pandoc_cmd, cwd=input_path.parent)
 
         shutil.copy2(html_path, output_html)
