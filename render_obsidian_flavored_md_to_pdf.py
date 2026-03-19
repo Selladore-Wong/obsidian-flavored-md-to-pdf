@@ -32,7 +32,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("-o", "--output", help="Output PDF path")
     parser.add_argument(
         "--vault",
-        help="Vault root. Defaults to the nearest parent containing .obsidian.",
+        help="Optional vault root used as an extra search base for wiki links and embedded assets.",
     )
     parser.add_argument(
         "--css",
@@ -56,11 +56,11 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def find_vault_root(path: pathlib.Path) -> pathlib.Path:
+def find_vault_root(path: pathlib.Path) -> pathlib.Path | None:
     for parent in [path.parent, *path.parents]:
         if (parent / ".obsidian").exists():
             return parent
-    raise SystemExit("Could not find a vault root containing .obsidian")
+    return None
 
 
 def slugify_callout(kind: str) -> str:
@@ -98,7 +98,9 @@ def render_mermaid(mermaid_source: str, index: int, tmpdir: pathlib.Path) -> str
     return image_path.name
 
 
-def convert_wikilink(raw: str, note_dir: pathlib.Path, vault_root: pathlib.Path, is_embed: bool) -> str:
+def convert_wikilink(
+    raw: str, note_dir: pathlib.Path, vault_root: pathlib.Path | None, is_embed: bool
+) -> str:
     target_part = raw
     alias = None
     if "|" in raw:
@@ -123,10 +125,12 @@ def convert_wikilink(raw: str, note_dir: pathlib.Path, vault_root: pathlib.Path,
         candidates.append(raw_path)
     else:
         candidates.append(note_dir / raw_path)
-        candidates.append(vault_root / raw_path)
+        if vault_root is not None:
+            candidates.append(vault_root / raw_path)
         if raw_path.suffix == "":
             candidates.append(note_dir / f"{path_part}.md")
-            candidates.append(vault_root / f"{path_part}.md")
+            if vault_root is not None:
+                candidates.append(vault_root / f"{path_part}.md")
 
     resolved = None
     for candidate in candidates:
@@ -153,7 +157,7 @@ def convert_wikilink(raw: str, note_dir: pathlib.Path, vault_root: pathlib.Path,
 
 
 def preprocess_markdown(
-    text: str, note_path: pathlib.Path, vault_root: pathlib.Path, tmpdir: pathlib.Path
+    text: str, note_path: pathlib.Path, vault_root: pathlib.Path | None, tmpdir: pathlib.Path
 ) -> str:
     note_dir = note_path.parent
 
@@ -253,11 +257,7 @@ def main() -> None:
     if not input_path.exists():
         raise SystemExit(f"Input file not found: {input_path}")
 
-    vault_root = (
-        pathlib.Path(args.vault).expanduser().resolve()
-        if args.vault
-        else find_vault_root(input_path)
-    )
+    vault_root = pathlib.Path(args.vault).expanduser().resolve() if args.vault else find_vault_root(input_path)
     css_path = pathlib.Path(args.css).expanduser().resolve()
     if not css_path.exists():
         raise SystemExit(f"CSS file not found: {css_path}")
@@ -277,6 +277,10 @@ def main() -> None:
         html_path = tmpdir / output_html.name
         prepared_md.write_text(prepared, encoding="utf-8")
 
+        resource_paths = [str(tmpdir), str(input_path.parent)]
+        if vault_root is not None and vault_root != input_path.parent:
+            resource_paths.append(str(vault_root))
+
         pandoc_cmd = [
             "pandoc",
             str(prepared_md),
@@ -284,7 +288,7 @@ def main() -> None:
             "--to=html5",
             "--standalone",
             "--embed-resources",
-            f"--resource-path={tmpdir}:{input_path.parent}:{vault_root}",
+            f"--resource-path={':'.join(resource_paths)}",
             f"--css={css_path}",
             f"--metadata=title:{input_path.stem}",
             "--output",

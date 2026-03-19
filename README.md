@@ -27,7 +27,9 @@ Notes:
 - The script will try `google-chrome`, `chrome`, `chromium`, and `chromium-browser` for PDF printing.
 - You can override browser detection with `--browser /path/to/browser` or `--browser chrome`.
 - `mmdc` is only needed when your note contains Mermaid blocks.
-- The script expects your note to live inside an Obsidian vault. By default, it searches upward for a `.obsidian` directory.
+- The script can render Markdown from any location.
+- If the note lives inside an Obsidian vault, the nearest parent containing `.obsidian` is auto-detected and used as an extra search base for wiki links and embedded assets.
+- You can override or supply that extra search base explicitly with `--vault /path/to/vault`.
 
 ## Installation
 
@@ -71,7 +73,7 @@ Keep the intermediate HTML file next to the PDF:
 obsidian-flavored-md-to-pdf /path/to/note.md --keep-html
 ```
 
-Use an explicit vault root instead of auto-detection:
+Use an explicit vault root as an extra search base for wiki links and embedded assets:
 
 ```bash
 obsidian-flavored-md-to-pdf /path/to/note.md --vault /path/to/vault
@@ -100,6 +102,8 @@ By default:
 
 - the PDF is written next to the source note
 - an intermediate HTML file is created temporarily and then removed
+- the source note directory is always used for relative links and assets
+- if a `.obsidian` directory is found above the note, that vault root is also used when resolving Obsidian-style wiki links
 
 ## Mermaid Behavior
 
