@@ -240,7 +240,7 @@ def preprocess_markdown(
     return "\n".join(out) + "\n"
 
 
-def infer_document_title(text: str, fallback: str) -> str:
+def infer_document_title(text: str, fallback: str) -> tuple[str, bool]:
     lines = text.splitlines()
     in_front_matter = False
     in_fence: str | None = None
@@ -270,12 +270,12 @@ def infer_document_title(text: str, fallback: str) -> str:
 
         atx_h1 = ATX_H1_RE.match(line)
         if atx_h1:
-            return atx_h1.group("title").strip()
+            return atx_h1.group("title").strip(), True
 
         if i + 1 < len(lines) and line.strip() and SETEXT_H1_RE.match(lines[i + 1]):
-            return line.strip()
+            return line.strip(), True
 
-    return fallback
+    return fallback, False
 
 
 def run(cmd: list[str], cwd: pathlib.Path) -> None:
@@ -325,7 +325,8 @@ def main() -> None:
         prepared_md = tmpdir / input_path.name
         html_path = tmpdir / output_html.name
         prepared_md.write_text(prepared, encoding="utf-8")
-        document_title = args.title if args.title is not None else infer_document_title(raw, input_path.stem)
+        inferred_title, has_h1 = infer_document_title(raw, input_path.stem)
+        document_title = args.title if args.title is not None else inferred_title
 
         resource_paths = [str(tmpdir), str(input_path.parent)]
         if vault_root is not None and vault_root != input_path.parent:
@@ -343,7 +344,7 @@ def main() -> None:
             "--output",
             str(html_path),
         ]
-        if not args.no_title_block:
+        if not args.no_title_block and (args.title is not None or not has_h1):
             pandoc_cmd.insert(-2, f"--metadata=title:{document_title}")
         run(pandoc_cmd, cwd=input_path.parent)
 

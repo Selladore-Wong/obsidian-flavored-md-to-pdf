@@ -116,7 +116,9 @@ By default:
 - an intermediate HTML file is created temporarily and then removed
 - the source note directory is always used for relative links and assets
 - if a `.obsidian` directory is found above the note, that vault root is also used when resolving Obsidian-style wiki links
-- the generated title block uses the first level-1 heading in the source note, or falls back to the file name if no level-1 heading is present
+- if the source note has no level-1 heading, a title block is generated from the file name
+- if the source note already has a level-1 heading, no extra title block is added by default
+- `--title` forces an explicit title block, and `--no-title-block` disables it
 
 ## Mermaid Behavior
 
